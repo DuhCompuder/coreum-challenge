@@ -88,7 +88,7 @@ balance_changes = [
             address: "issuer_account_A"
             coins: [
                 {
-                    "denom1": 80
+                    "denom1": 120
                 }
             ]
         }
