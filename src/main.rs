@@ -16,7 +16,7 @@ struct MultiSend {
     // each account
     outputs: Vec<Balance>,
 }
-
+#[derive(Clone)]
 pub struct Coin {
     pub denom: String,
     pub amount: i128,
@@ -82,5 +82,129 @@ fn calculate_balance_changes(
     definitions: Vec<DenomDefinition>,
     multi_send_tx: MultiSend,
 ) -> Result<Vec<Balance>, String> {
-    Err("Not Implemented".to_string())
+    let mut result: Vec<Balance> = Vec::new();
+    let mut map: HashMap<String, Vec<Coin>> = HashMap::new();
+
+    //account for orignal balances in a mapping
+    original_balances.iter().for_each(|x| {
+        map.insert(x.address.clone(), x.coins.clone());
+    });
+
+    //read mutisend output and push first result
+    //reach each denom definition
+    //if burnrate does not equal zero for a denom, initialize a mapping for the issuer accout in the mapping
+    //read input and apply definitions for each specified denomination
+    //apply commission rates to issuer accounts if any and push them to result
+    //apply burnrate, commision rate and send amount deductions to each denomination and push each account to result
+
+    // Err("Not Implemented".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn example_1() {
+        //Test input values
+        let original_balances: Vec<Balance> = [
+            Balance {
+                address: "account1",
+                coins: [Coin {
+                    denom: "denom1",
+                    amount: 1000_000,
+                }],
+            },
+            Balance {
+                address: "account2",
+                coins: [Coin {
+                    denom: "denom2",
+                    amount: 1000_000,
+                }],
+            },
+        ];
+        let definitions: Vec<DenomDefinition> = [
+            DenomDefinition {
+                denom: "denom1",
+                issuer: "issuer_account_A",
+                burn_rate: 0.08,
+                commission_rate: 0.12,
+            },
+            DenomDefinition {
+                denom: "denom2",
+                issuer: "issuer_account_B",
+                burn_rate: 1,
+                commission_rate: 0,
+            },
+        ];
+        let multi_send: MultiSend = MultiSend {
+            inputs: [
+                Balance {
+                    address: "account1",
+                    coins: [Coin {
+                        denom: "denom1",
+                        amount: 1000,
+                    }],
+                },
+                Balance {
+                    address: "account2",
+                    coins: [Coin {
+                        denom: "denom2",
+                        amount: 1000,
+                    }],
+                },
+            ],
+            outputs: [Balance {
+                address: "account_recipient",
+                coins: [
+                    Coin {
+                        denom: "denom1",
+                        amount: 1000,
+                    },
+                    Coin {
+                        denom: "denom2",
+                        amount: 1000,
+                    },
+                ],
+            }],
+        };
+
+        // Resulting Output:
+        let balance_changes: Vec<Balance> = [
+            Balance {
+                address: "account_recipient",
+                coins: [
+                    Coin {
+                        denom: "denom1",
+                        amount: 1000,
+                    },
+                    Coin {
+                        denom: "denom2",
+                        amount: 1000,
+                    },
+                ],
+            },
+            Balance {
+                address: "issuer_account_A",
+                coins: [Coin {
+                    denom: "denom1",
+                    amount: 120,
+                }],
+            },
+            Balance {
+                address: "account1",
+                coins: [Coin {
+                    denom: "denom1",
+                    amount: -1200, // (1000 sent, 80 burnt, 120 send to issuer as commission)
+                }],
+            },
+            Balance {
+                address: "account2",
+                coins: [Coin {
+                    denom: "denom2",
+                    amount: -2000, // (1000 sent and 1000 burnt(burn_rate is 1))
+                }],
+            },
+        ];
+    }
 }
