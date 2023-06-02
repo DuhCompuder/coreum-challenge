@@ -22,12 +22,20 @@ pub struct Coin {
     pub amount: i128,
 }
 
+impl Coin {
+    fn new(denom: String) -> Coin {
+        Coin { denom, amount: 0 }
+    }
+}
+
+#[derive(Clone)]
 struct Balance {
     address: String,
     coins: Vec<Coin>,
 }
 
 // A Denom has a definition (`CoinDefinition`) which contains different attributes related to the denom:
+#[derive(Clone)]
 struct DenomDefinition {
     // the unique identifier for the token (e.g `core`, `eth`, `usdt`, etc.)
     denom: String,
@@ -83,21 +91,44 @@ fn calculate_balance_changes(
     multi_send_tx: MultiSend,
 ) -> Result<Vec<Balance>, String> {
     let mut result: Vec<Balance> = Vec::new();
-    let mut map: HashMap<String, Vec<Coin>> = HashMap::new();
-
+    //use mappings for efficient referencing
+    let mut account_balances_map: HashMap<String, Vec<Coin>> = HashMap::new();
+    let mut definitions_map: HashMap<String, DenomDefinition> = HashMap::new();
     //account for orignal balances in a mapping
     original_balances.iter().for_each(|x| {
-        map.insert(x.address.clone(), x.coins.clone());
+        account_balances_map.insert(x.address.clone(), x.coins.clone());
     });
-
-    //read mutisend output and push first result
+    //set definitions mapping
+    definitions.iter().for_each(|x| {
+        definitions_map.insert(x.denom.clone(), x.clone());
+    });
+    //read mutisend output and push first to result
+    multi_send_tx.outputs.iter().for_each(|x| {
+        result.push(x.clone());
+    });
     //reach each denom definition
-    //if burnrate does not equal zero for a denom, initialize a mapping for the issuer accout in the mapping
+    //if commission does not equal zero for a denom, initialize a mapping for the issuer accout in the mapping
+    // definitions.iter().for_each(|x| {
+    //     if x.commission_rate != 0f64 {
+    //         account_balances_map.insert(x.issuer.clone(), Coin::new(x.denom.clone()));
+    //     }
+    // });
     //read input and apply definitions for each specified denomination
     //apply commission rates to issuer accounts if any and push them to result
     //apply burnrate, commision rate and send amount deductions to each denomination and push each account to result
-
-    // Err("Not Implemented".to_string())
+    multi_send_tx.inputs.iter().for_each(|x: &Balance| {
+        x.coins.iter().for_each(|coin| {
+            //calculate burn
+            let burn =
+                coin.amount.clone() * definitions_map.get(&coin.denom.clone()).unwrap().burn_rate;
+            //calculate commision
+            //update balance for sending account
+            //update issuer balance for commission
+        })
+    });
+    //push updated issuer account balances
+    //push updated input account balances
+    Err("Not Implemented".to_string())
 }
 
 #[cfg(test)]
