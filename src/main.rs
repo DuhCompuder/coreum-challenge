@@ -90,9 +90,12 @@ fn calculate_balance_changes(
     definitions: Vec<DenomDefinition>,
     multi_send_tx: MultiSend,
 ) -> Result<Vec<Balance>, String> {
+    //stores the order of account addresses to push onto result
+    let mut updated_accounts_to_return: Vec<String> = Vec::new();
     let mut result: Vec<Balance> = Vec::new();
     //use mappings for efficient referencing
     let mut account_balances_map: HashMap<String, Vec<Coin>> = HashMap::new();
+    // let mut account_balances_map2: HashMap<String, HashMap<String, Coin>> = HashMap::new();
     let mut definitions_map: HashMap<String, DenomDefinition> = HashMap::new();
     //account for orignal balances in a mapping
     original_balances.iter().for_each(|x| {
@@ -117,12 +120,33 @@ fn calculate_balance_changes(
     //apply commission rates to issuer accounts if any and push them to result
     //apply burnrate, commision rate and send amount deductions to each denomination and push each account to result
     multi_send_tx.inputs.iter().for_each(|x: &Balance| {
+        let mut denom_for_issuers_to_update: Vec<String> = Vec::new();
+        //each coin per account to update
         x.coins.iter().for_each(|coin| {
+            if !denom_for_issuers_to_update.contains(&coin.denom) {
+                denom_for_issuers_to_update.push(coin.denom.clone());
+            }
+
+            let coin_definition = definitions_map.get(&coin.denom).unwrap();
             //calculate burn
-            let burn =
-                coin.amount.clone() * definitions_map.get(&coin.denom.clone()).unwrap().burn_rate;
+            let burn = coin.amount as f64 * &coin_definition.burn_rate;
             //calculate commision
+            let commission = coin.amount as f64 * &coin_definition.commission_rate;
             //update balance for sending account
+            let mut new_balance = original_balances
+                .iter()
+                .find(|&b| b.address == x.address)
+                .unwrap()
+                .clone();
+            let denom_index = new_balance
+                .coins
+                .iter()
+                .position(|c| c.denom == coin.denom)
+                .unwrap();
+            new_balance.coins[denom_index].amount -=
+                coin.amount + burn as i128 + commission as i128;
+
+            account_balances_map.insert(x.address, new_balance);
             //update issuer balance for commission
         })
     });
