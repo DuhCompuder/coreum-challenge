@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::HashMap;
 
 fn main() {
@@ -90,69 +91,98 @@ fn calculate_balance_changes(
     definitions: Vec<DenomDefinition>,
     multi_send_tx: MultiSend,
 ) -> Result<Vec<Balance>, String> {
-    //stores the order of account addresses to push onto result
-    let mut updated_accounts_to_return: Vec<String> = Vec::new();
-    let mut result: Vec<Balance> = Vec::new();
-    //use mappings for efficient referencing
-    let mut account_balances_map: HashMap<String, Vec<Coin>> = HashMap::new();
-    // let mut account_balances_map2: HashMap<String, HashMap<String, Coin>> = HashMap::new();
-    let mut definitions_map: HashMap<String, DenomDefinition> = HashMap::new();
-    //account for orignal balances in a mapping
-    original_balances.iter().for_each(|x| {
-        account_balances_map.insert(x.address.clone(), x.coins.clone());
-    });
-    //set definitions mapping
-    definitions.iter().for_each(|x| {
-        definitions_map.insert(x.denom.clone(), x.clone());
-    });
-    //read mutisend output and push first to result
-    multi_send_tx.outputs.iter().for_each(|x| {
-        result.push(x.clone());
-    });
-    //reach each denom definition
-    //if commission does not equal zero for a denom, initialize a mapping for the issuer accout in the mapping
-    // definitions.iter().for_each(|x| {
-    //     if x.commission_rate != 0f64 {
-    //         account_balances_map.insert(x.issuer.clone(), Coin::new(x.denom.clone()));
-    //     }
-    // });
-    //read input and apply definitions for each specified denomination
-    //apply commission rates to issuer accounts if any and push them to result
-    //apply burnrate, commision rate and send amount deductions to each denomination and push each account to result
-    multi_send_tx.inputs.iter().for_each(|x: &Balance| {
-        let mut denom_for_issuers_to_update: Vec<String> = Vec::new();
-        //each coin per account to update
-        x.coins.iter().for_each(|coin| {
-            if !denom_for_issuers_to_update.contains(&coin.denom) {
-                denom_for_issuers_to_update.push(coin.denom.clone());
+    let mut denoms_to_update: Vec<String> = Vec::new();
+    let mut non_issuer_input_sum: HashMap<String, u128> = HashMap::new();
+    let mut non_issuer_output_sum: HashMap<String, u128> = HashMap::new();
+    let mut insufficient_amount: bool = false;
+
+    multi_send_tx
+        .inputs
+        .clone()
+        .into_iter()
+        .for_each(|input: Balance| {
+            input.coins.into_iter().for_each(|coin: Coin| {
+                if !denoms_to_update.contains(&coin.denom) {
+                    denoms_to_update.push(coin.denom.clone());
+                }
+                let mut update_denom = non_issuer_input_sum.get(&coin.denom);
+                if update_denom.is_some() {
+                    non_issuer_input_sum.insert(
+                        coin.denom.clone(),
+                        coin.amount as u128 + update_denom.unwrap(),
+                    );
+                } else {
+                    non_issuer_input_sum.insert(coin.denom.clone(), coin.amount as u128);
+                }
+                let coin_definition: DenomDefinition = definitions
+                    .iter()
+                    .find(|&d| d.denom == coin.denom.clone())
+                    .unwrap()
+                    .clone();
+                let burn = coin.amount as f64 * &coin_definition.burn_rate;
+                let commission = coin.amount as f64 * &coin_definition.commission_rate;
+                let total_deduct = coin.amount + burn as i128 + commission as i128;
+
+                let balance_amount: i128 = original_balances
+                    .iter()
+                    .find(|&b: &&Balance| b.address == input.address)
+                    .unwrap()
+                    .coins
+                    .iter()
+                    .find(|&c: &&Coin| c.denom == coin.denom.clone())
+                    .unwrap()
+                    .amount
+                    .clone();
+                if total_deduct == balance_amount {
+                    insufficient_amount = true;
+                }
+            })
+        });
+    if insufficient_amount == true {
+        return Err("Insufficient amount in balance".to_string());
+    }
+    multi_send_tx.outputs.into_iter().for_each(|output| {
+        output.coins.into_iter().for_each(|coin| {
+            if !denoms_to_update.contains(&coin.denom) {
+                denoms_to_update.push(coin.denom.clone());
+                println!("{}", coin.denom)
             }
-
-            let coin_definition = definitions_map.get(&coin.denom).unwrap();
-            //calculate burn
-            let burn = coin.amount as f64 * &coin_definition.burn_rate;
-            //calculate commision
-            let commission = coin.amount as f64 * &coin_definition.commission_rate;
-            //update balance for sending account
-            let mut new_balance = original_balances
-                .iter()
-                .find(|&b| b.address == x.address)
-                .unwrap()
-                .clone();
-            let denom_index = new_balance
-                .coins
-                .iter()
-                .position(|c| c.denom == coin.denom)
-                .unwrap();
-            new_balance.coins[denom_index].amount -=
-                coin.amount + burn as i128 + commission as i128;
-
-            account_balances_map.insert(x.address, new_balance);
-            //update issuer balance for commission
+            let mut update_denom = non_issuer_output_sum.get(&coin.denom);
+            if update_denom.is_some() {
+                non_issuer_output_sum
+                    .insert(coin.denom, coin.amount as u128 + update_denom.unwrap());
+            } else {
+                non_issuer_output_sum.insert(coin.denom, coin.amount as u128);
+            }
         })
     });
-    //push updated issuer account balances
-    //push updated input account balances
-    Err("Not Implemented".to_string())
+
+    for (index, value) in denoms_to_update.into_iter().enumerate() {
+        if non_issuer_input_sum.get(&value) != non_issuer_output_sum.get(&value) {
+            return Err("Inputs do not match outputs".to_string());
+        }
+    }
+
+    for (index, input) in multi_send_tx.inputs.into_iter().enumerate() {
+        // finsih output
+        input.coins.into_iter().for_each(|coin| {
+            // total_burn = min(non_issuer_input_sum, non_issuer_output_sum) //total burn amount
+            let denom = &coin.denom.clone();
+            let amount = coin.amount.clone() as u128;
+            let total_burn = min(
+                non_issuer_input_sum.get(denom),
+                non_issuer_output_sum.get(denom),
+            )
+            .unwrap();
+            // account_share = roundup(total_burn * input_from_account / non_issuer_input_sum)
+            let account_share = (total_burn * amount / non_issuer_input_sum.get(denom).unwrap());
+            // total_burn_amount = sum (account_shares)
+        })
+    }
+
+    Err("Inputs do not match outputs".to_string())
+
+    // Err("Insufficient balance: {:?}".to_string(), account_address)
 }
 
 #[cfg(test)]
