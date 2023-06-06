@@ -35,6 +35,15 @@ struct Balance {
     coins: Vec<Coin>,
 }
 
+impl Balance {
+    fn new(address: String) -> Balance {
+        Balance {
+            address,
+            coins: Vec::new(),
+        }
+    }
+}
+
 // A Denom has a definition (`CoinDefinition`) which contains different attributes related to the denom:
 #[derive(Clone)]
 struct DenomDefinition {
@@ -92,6 +101,8 @@ fn calculate_balance_changes(
     multi_send_tx: MultiSend,
 ) -> Result<Vec<Balance>, String> {
     let mut denoms_to_update: Vec<String> = Vec::new();
+    let mut result_balances: Vec<Balance> = Vec::new();
+    // let mut result_balances_map: HashMap<String, Balance> = HashMap::new();
     let mut non_issuer_input_sum: HashMap<String, u128> = HashMap::new();
     let mut non_issuer_output_sum: HashMap<String, u128> = HashMap::new();
     let mut insufficient_amount: bool = false;
@@ -165,19 +176,33 @@ fn calculate_balance_changes(
 
     for (index, input) in multi_send_tx.inputs.into_iter().enumerate() {
         // finsih output
+        let mut balance_new = Balance::new(input.address);
         input.coins.into_iter().for_each(|coin| {
             // total_burn = min(non_issuer_input_sum, non_issuer_output_sum) //total burn amount
-            let denom = &coin.denom.clone();
-            let amount = coin.amount.clone() as u128;
+            let denom = coin.denom.clone();
+            let amount = coin.amount as u128;
+            let commission = coin.amount as f64
+                * definitions
+                    .clone()
+                    .into_iter()
+                    .find(|d| &d.denom == &denom)
+                    .unwrap()
+                    .commission_rate;
+
             let total_burn = min(
-                non_issuer_input_sum.get(denom),
-                non_issuer_output_sum.get(denom),
+                non_issuer_input_sum.get(&denom),
+                non_issuer_output_sum.get(&denom),
             )
             .unwrap();
             // account_share = roundup(total_burn * input_from_account / non_issuer_input_sum)
-            let account_share = (total_burn * amount / non_issuer_input_sum.get(denom).unwrap());
+            let account_share = (total_burn * amount / non_issuer_input_sum.get(&denom).unwrap());
             // total_burn_amount = sum (account_shares)
+
+            let mut updated_coin_details = Coin::new(denom);
+            updated_coin_details.amount -= coin.amount + account_share as i128 + commission as i128;
+            balance_new.coins.push(updated_coin_details);
         })
+        result_balances.push(balance_new);
     }
 
     Err("Inputs do not match outputs".to_string())
@@ -194,102 +219,118 @@ mod tests {
         //Test input values
         let original_balances: Vec<Balance> = [
             Balance {
-                address: "account1",
+                address: "account1".to_string(),
                 coins: [Coin {
-                    denom: "denom1",
+                    denom: "denom1".to_string(),
                     amount: 1000_000,
-                }],
+                }]
+                .to_vec(),
             },
             Balance {
-                address: "account2",
+                address: "account2".to_string(),
                 coins: [Coin {
-                    denom: "denom2",
+                    denom: "denom2".to_string(),
                     amount: 1000_000,
-                }],
+                }]
+                .to_vec(),
             },
-        ];
+        ]
+        .to_vec();
         let definitions: Vec<DenomDefinition> = [
             DenomDefinition {
-                denom: "denom1",
-                issuer: "issuer_account_A",
+                denom: "denom1".to_string(),
+                issuer: "issuer_account_A".to_string(),
                 burn_rate: 0.08,
                 commission_rate: 0.12,
             },
             DenomDefinition {
-                denom: "denom2",
-                issuer: "issuer_account_B",
-                burn_rate: 1,
-                commission_rate: 0,
+                denom: "denom2".to_string(),
+                issuer: "issuer_account_B".to_string(),
+                burn_rate: 1.0,
+                commission_rate: 0.0,
             },
-        ];
+        ]
+        .to_vec();
         let multi_send: MultiSend = MultiSend {
             inputs: [
                 Balance {
-                    address: "account1",
+                    address: "account1".to_string(),
                     coins: [Coin {
-                        denom: "denom1",
+                        denom: "denom1".to_string(),
                         amount: 1000,
-                    }],
+                    }]
+                    .to_vec(),
                 },
                 Balance {
-                    address: "account2",
+                    address: "account2".to_string(),
                     coins: [Coin {
-                        denom: "denom2",
+                        denom: "denom2".to_string(),
                         amount: 1000,
-                    }],
+                    }]
+                    .to_vec(),
                 },
-            ],
+            ]
+            .to_vec(),
             outputs: [Balance {
-                address: "account_recipient",
+                address: "account_recipient".to_string(),
                 coins: [
                     Coin {
-                        denom: "denom1",
+                        denom: "denom1".to_string(),
                         amount: 1000,
                     },
                     Coin {
-                        denom: "denom2",
+                        denom: "denom2".to_string(),
                         amount: 1000,
                     },
-                ],
-            }],
+                ]
+                .to_vec(),
+            }]
+            .to_vec(),
         };
+
+        let result = calculate_balance_changes(original_balances, definitions, multi_send);
 
         // Resulting Output:
         let balance_changes: Vec<Balance> = [
             Balance {
-                address: "account_recipient",
+                address: "account_recipient".to_string(),
                 coins: [
                     Coin {
-                        denom: "denom1",
+                        denom: "denom1".to_string(),
                         amount: 1000,
                     },
                     Coin {
-                        denom: "denom2",
+                        denom: "denom2".to_string(),
                         amount: 1000,
                     },
-                ],
+                ]
+                .to_vec(),
             },
             Balance {
-                address: "issuer_account_A",
+                address: "issuer_account_A".to_string(),
                 coins: [Coin {
-                    denom: "denom1",
+                    denom: "denom1".to_string(),
                     amount: 120,
-                }],
+                }]
+                .to_vec(),
             },
             Balance {
-                address: "account1",
+                address: "account1".to_string(),
                 coins: [Coin {
-                    denom: "denom1",
+                    denom: "denom1".to_string(),
                     amount: -1200, // (1000 sent, 80 burnt, 120 send to issuer as commission)
-                }],
+                }]
+                .to_vec(),
             },
             Balance {
-                address: "account2",
+                address: "account2".to_string(),
                 coins: [Coin {
-                    denom: "denom2",
+                    denom: "denom2".to_string(),
                     amount: -2000, // (1000 sent and 1000 burnt(burn_rate is 1))
-                }],
+                }]
+                .to_vec(),
             },
-        ];
+        ]
+        .to_vec();
     }
 }
