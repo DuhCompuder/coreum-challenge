@@ -230,7 +230,7 @@ fn calculate_balance_changes(
         output.coins.into_iter().for_each(|coin| {
             if !denoms_to_update.contains(&coin.denom) {
                 denoms_to_update.push(coin.denom.clone());
-                println!("{}", coin.denom)
+                println!("{}", coin.denom);
             }
             let mut update_denom = non_issuer_output_sum.get(&coin.denom);
             if update_denom.is_some() {
@@ -441,5 +441,159 @@ mod tests {
         .to_vec();
 
         assert_eq!(result, Ok(balance_changes));
+    }
+
+    #[test]
+    fn example_2() {
+        //Test input values
+        let original_balances: Vec<Balance> = [
+            Balance {
+                address: "account1".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: 1000_000,
+                }]
+                .to_vec(),
+            },
+            Balance {
+                address: "account2".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: 1000_000,
+                }]
+                .to_vec(),
+            },
+        ]
+        .to_vec();
+        let definitions: Vec<DenomDefinition> = [DenomDefinition {
+            denom: "denom1".to_string(),
+            issuer: "issuer_account_A".to_string(),
+            burn_rate: 0.08,
+            commission_rate: 0.12,
+        }]
+        .to_vec();
+        let multi_send: MultiSend = MultiSend {
+            inputs: [
+                Balance {
+                    address: "account1".to_string(),
+                    coins: [Coin {
+                        denom: "denom1".to_string(),
+                        amount: 650,
+                    }]
+                    .to_vec(),
+                },
+                Balance {
+                    address: "account2".to_string(),
+                    coins: [Coin {
+                        denom: "denom1".to_string(),
+                        amount: 350,
+                    }]
+                    .to_vec(),
+                },
+            ]
+            .to_vec(),
+            outputs: [
+                Balance {
+                    address: "account_recipient".to_string(),
+                    coins: [Coin {
+                        denom: "denom1".to_string(),
+                        amount: 500,
+                    }]
+                    .to_vec(),
+                },
+                Balance {
+                    address: "issuer_account_A".to_string(),
+                    coins: [Coin {
+                        denom: "denom1".to_string(),
+                        amount: 500,
+                    }]
+                    .to_vec(),
+                },
+            ]
+            .to_vec(),
+        };
+
+        let result = calculate_balance_changes(original_balances, definitions, multi_send);
+        println!("{:#?}", result.clone());
+        // Resulting Output:
+        let balance_changes: Vec<Balance> = [
+            Balance {
+                address: "account_recipient".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: 500,
+                }]
+                .to_vec(),
+            },
+            Balance {
+                address: "issuer_account_A".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: 560,
+                }]
+                .to_vec(),
+            },
+            Balance {
+                address: "account1".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: -715, // (1000 sent, 80 burnt, 120 send to issuer as commission)
+                }]
+                .to_vec(),
+            },
+            Balance {
+                address: "account2".to_string(),
+                coins: [Coin {
+                    denom: "denom2".to_string(),
+                    amount: -385, // (1000 sent and 1000 burnt(burn_rate is 1))
+                }]
+                .to_vec(),
+            },
+        ]
+        .to_vec();
+
+        assert_eq!(result, Ok(balance_changes));
+    }
+
+    #[test]
+    fn example_3() {
+        //Test input values
+        let original_balances: Vec<Balance> = [Balance {
+            address: "account1".to_string(),
+            coins: Vec::new(),
+        }]
+        .to_vec();
+        let definitions: Vec<DenomDefinition> = [DenomDefinition {
+            denom: "denom1".to_string(),
+            issuer: "issuer_account_A".to_string(),
+            burn_rate: 0.0,
+            commission_rate: 0.0,
+        }]
+        .to_vec();
+        let multi_send: MultiSend = MultiSend {
+            inputs: [Balance {
+                address: "account1".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: 350,
+                }]
+                .to_vec(),
+            }]
+            .to_vec(),
+            outputs: [Balance {
+                address: "account_recipient".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: 350,
+                }]
+                .to_vec(),
+            }]
+            .to_vec(),
+        };
+
+        let result = calculate_balance_changes(original_balances, definitions, multi_send);
+        println!("{:#?}", result.clone());
+        // Resulting Output:
+        assert_eq!(result, Err("Insufficient amount in balance".to_string()));
     }
 }
