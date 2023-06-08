@@ -304,7 +304,7 @@ ERROR // notice that input and output does not match
 
 ```
 
-Example 4 (demonstrate rounding up)
+Example 5 (demonstrate rounding up)
 ```
 original_balances [
     "account1" = {
@@ -380,7 +380,7 @@ balance_changes = [
             address: "account1"
             coins: [
                 {
-                    "denom1": 3  // 1 sent, 1 burnt , 1 send to issuer as commission (1 = roundup(2 * 0.01))
+                    "denom1": -3  // 1 sent, 1 burnt , 1 send to issuer as commission (1 = roundup(2 * 0.01))
                 }
             ]
         }
@@ -388,7 +388,7 @@ balance_changes = [
             address: "account2"
             coins: [
                 {
-                    "denom1": 3  // 1 sent, 1 burnt , 1 send to issuer as commission 
+                    "denom1": -3  // 1 sent, 1 burnt , 1 send to issuer as commission 
                 }
             ]
         }
