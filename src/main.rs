@@ -185,7 +185,7 @@ fn calculate_balance_changes(
         .clone()
         .into_iter()
         .for_each(|input: Balance| {
-            input.coins.into_iter().for_each(|coin: Coin| {
+            input.coins.clone().into_iter().for_each(|coin: Coin| {
                 if !denoms_to_update.contains(&coin.denom) {
                     denoms_to_update.push(coin.denom.clone());
                 }
@@ -208,16 +208,37 @@ fn calculate_balance_changes(
                 let total_deduct = coin.amount + burn as i128 + commission as i128;
 
                 let balance_amount: i128 = original_balances
-                    .iter()
-                    .find(|&b: &&Balance| b.address == input.address)
-                    .unwrap()
+                    .clone()
+                    .into_iter()
+                    .find(|b: &Balance| {
+                        println!(
+                            "Debug: (b.address) {}, (input.address) {}.",
+                            b.address, input.address
+                        );
+                        b.address == input.address
+                    })
+                    .unwrap_or(Balance::new(input.address.clone()))
                     .coins
-                    .iter()
-                    .find(|&c: &&Coin| c.denom == coin.denom.clone())
-                    .unwrap()
+                    .into_iter()
+                    .find(|c: &Coin| {
+                        println!("coin: {:#?}", c);
+                        println!(
+                            "Debug: (c.denom) {}, (coin.denom.clone()) {}.",
+                            c.denom.clone(),
+                            coin.denom.clone()
+                        );
+                        c.denom == coin.denom.clone()
+                    })
+                    .unwrap_or(Coin::new(coin.denom.clone()))
                     .amount
                     .clone();
-                if total_deduct == balance_amount {
+
+                println!(
+                    "Debug: (total_deduct) {}, (balance_amount) {}.",
+                    total_deduct.clone(),
+                    balance_amount.clone()
+                );
+                if total_deduct > balance_amount {
                     insufficient_amount = true;
                 }
             })
@@ -241,7 +262,7 @@ fn calculate_balance_changes(
             }
         })
     });
-
+    println!("result_balances: {:#?}", result_balances.clone());
     for (index, value) in denoms_to_update.into_iter().enumerate() {
         if non_issuer_input_sum.get(&value) != non_issuer_output_sum.get(&value) {
             return Err("Inputs do not match outputs".to_string());
@@ -269,11 +290,22 @@ fn calculate_balance_changes(
             .unwrap();
             // account_share = roundup(total_burn * input_from_account / non_issuer_input_sum)
             let burn = *total_burn as f64 * &coin_definition.burn_rate;
-
+            println!(
+                "burn: {}, amount: {}, non_issuer_input_sum: {}",
+                burn.clone(),
+                amount.clone(),
+                non_issuer_input_sum.get(&denom).unwrap().clone()
+            );
             let account_share = burn as u128 * amount / non_issuer_input_sum.get(&denom).unwrap();
             // total_burn_amount = sum (account_shares)
 
             let mut updated_coin_details = Coin::new(denom);
+            println!(
+                "amount: {}, account_share: {}, commit_rate: {}",
+                coin.amount.clone(),
+                account_share.clone(),
+                commission.clone()
+            );
             updated_coin_details.amount -= coin.amount + account_share as i128 + commission;
 
             balance_new.coins.push(updated_coin_details);
@@ -293,7 +325,7 @@ fn calculate_balance_changes(
                             .find(|c| c.denom == coin_definition.denom)
                             .unwrap()
                             .amount += commission;
-                        let index: usize = has_issuer
+                        let index: usize = result_balances
                             .iter()
                             .position(|b| b.address == coin_definition.issuer)
                             .unwrap();
@@ -310,6 +342,7 @@ fn calculate_balance_changes(
             }
         });
         result_balances.push(balance_new);
+        println!("result_balances: {:#?}", result_balances.clone());
     }
     Ok(result_balances)
     // Err("Inputs do not match outputs".to_string())
@@ -595,5 +628,51 @@ mod tests {
         println!("{:#?}", result.clone());
         // Resulting Output:
         assert_eq!(result, Err("Insufficient amount in balance".to_string()));
+    }
+
+    #[test]
+    fn example_4() {
+        //Test input values
+        let original_balances: Vec<Balance> = [Balance {
+            address: "account1".to_string(),
+            coins: [Coin {
+                denom: "denom1".to_string(),
+                amount: 1000_000,
+            }]
+            .to_vec(),
+        }]
+        .to_vec();
+        let definitions: Vec<DenomDefinition> = [DenomDefinition {
+            denom: "denom1".to_string(),
+            issuer: "issuer_account_A".to_string(),
+            burn_rate: 0.0,
+            commission_rate: 0.0,
+        }]
+        .to_vec();
+        let multi_send: MultiSend = MultiSend {
+            inputs: [Balance {
+                address: "account1".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: 350,
+                }]
+                .to_vec(),
+            }]
+            .to_vec(),
+            outputs: [Balance {
+                address: "account_recipient".to_string(),
+                coins: [Coin {
+                    denom: "denom1".to_string(),
+                    amount: 450,
+                }]
+                .to_vec(),
+            }]
+            .to_vec(),
+        };
+
+        let result = calculate_balance_changes(original_balances, definitions, multi_send);
+        println!("{:#?}", result.clone());
+        // Resulting Output:
+        assert_eq!(result, Err("Inputs do not match outputs".to_string()));
     }
 }
