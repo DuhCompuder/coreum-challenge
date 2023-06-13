@@ -263,7 +263,7 @@ fn calculate_balance_changes(
                 denoms_to_update.push(coin.denom.clone());
                 println!("{}", coin.denom);
             }
-            let update_denom = non_issuer_output_sum.get(&coin.denom);
+            let update_non_issuer_denom = non_issuer_output_sum.get(&coin.denom);
             println!(
                 "check if is issuer: {}",
                 output.address.contains("issuer_account")
@@ -272,24 +272,29 @@ fn calculate_balance_changes(
                 "check if is issuer coin info before: {:?}",
                 non_issuer_output_sum.get(&coin.denom)
             );
-            if update_denom.is_some() {
-                output_sum.insert(
-                    coin.denom.clone(),
-                    coin.amount as u128 + update_denom.unwrap(),
-                );
+            if update_non_issuer_denom.is_some() {
                 if !output.address.contains("issuer_account") {
                     non_issuer_output_sum.insert(
                         coin.denom.clone(),
-                        coin.amount as u128 + update_denom.unwrap(),
+                        coin.amount as u128 + update_non_issuer_denom.unwrap(),
                     );
                 }
             } else {
-                output_sum.insert(coin.denom.clone(), coin.amount as u128);
                 if !output.address.contains("issuer_account") {
                     non_issuer_output_sum.insert(coin.denom.clone(), coin.amount as u128);
                 } else {
                     non_issuer_output_sum.insert(coin.denom.clone(), 0);
                 }
+            }
+            let update_denom = output_sum.get(&coin.denom);
+
+            if update_denom.is_some() {
+                output_sum.insert(
+                    coin.denom.clone(),
+                    coin.amount as u128 + update_denom.unwrap(),
+                );
+            } else {
+                output_sum.insert(coin.denom.clone(), coin.amount as u128);
             }
             println!(
                 "check if is issuer coin info: {:?}",
@@ -299,6 +304,11 @@ fn calculate_balance_changes(
     });
     println!("result_balances: {:#?}", result_balances.clone());
     for (_index, value) in denoms_to_update.into_iter().enumerate() {
+        println!(
+            "input_sum.get(&value) vs. output_sum.get(&value): {:#?}, {:#?}",
+            input_sum.get(&value),
+            output_sum.get(&value)
+        );
         if input_sum.get(&value) != output_sum.get(&value) {
             return Err("Inputs do not match outputs".to_string());
         }
@@ -969,7 +979,7 @@ mod tests {
         assert_eq!(result, Ok(balance_changes));
     }
     #[test]
-    fn example_7() {
+    fn example_7_issuer_and_a_sender_both_as_receiver() {
         //Test input values
         let original_balances: Vec<Balance> = [
             Balance {
@@ -1028,7 +1038,7 @@ mod tests {
                         },
                         Coin {
                             denom: "denom2".to_string(),
-                            amount: 500,
+                            amount: 1000,
                         },
                     ]
                     .to_vec(),
@@ -1073,6 +1083,14 @@ mod tests {
                     .to_vec(),
                 },
                 Balance {
+                    address: "issuer_account_B".to_string(),
+                    coins: [Coin {
+                        denom: "denom2".to_string(),
+                        amount: 500,
+                    }]
+                    .to_vec(),
+                },
+                Balance {
                     address: "account2".to_string(),
                     coins: [Coin {
                         denom: "denom2".to_string(),
@@ -1111,6 +1129,14 @@ mod tests {
                 .to_vec(),
             },
             Balance {
+                address: "issuer_account_B".to_string(),
+                coins: [Coin {
+                    denom: "denom2".to_string(),
+                    amount: 751, // 500 sent, 84 commission from account1 and 167 commission from account2
+                }]
+                .to_vec(),
+            },
+            Balance {
                 address: "issuer_account_A".to_string(),
                 coins: [Coin {
                     denom: "denom1".to_string(),
@@ -1119,23 +1145,15 @@ mod tests {
                 .to_vec(),
             },
             Balance {
-                address: "issuer_account_B".to_string(),
-                coins: [Coin {
-                    denom: "denom2".to_string(),
-                    amount: 250,
-                }]
-                .to_vec(),
-            },
-            Balance {
                 address: "account1".to_string(),
                 coins: [
                     Coin {
                         denom: "denom1".to_string(),
-                        amount: -1150,
+                        amount: -1150, // 1000 sent, 100 burnt , 50 send to issuer as commission
                     },
                     Coin {
                         denom: "denom2".to_string(),
-                        amount: -625,
+                        amount: -1209, // 1000 sent, 125 burnt , 84 send to issuer as commission
                     },
                 ]
                 .to_vec(),
@@ -1145,11 +1163,11 @@ mod tests {
                 coins: [
                     Coin {
                         denom: "denom2".to_string(),
-                        amount: -2250,
+                        amount: -2167, // 2000 sent, 250 burnt, 167 send to issuer as commission and 250 received from account1
                     },
                     Coin {
                         denom: "denom1".to_string(),
-                        amount: -1150,
+                        amount: -1150, // 1000 sent, 100 burnt , 50 send to issuer as commission
                     },
                 ]
                 .to_vec(),
