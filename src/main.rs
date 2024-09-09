@@ -438,7 +438,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn example_1() {
+    fn example_1_No_issuer_on_sender_or_receiver() {
         //Test input values
         let original_balances: Vec<Balance> = [
             Balance {
@@ -560,7 +560,7 @@ mod tests {
     }
 
     #[test]
-    fn example_2() {
+    fn example_2_issuer_exists_on_sender_and_receiver() {
         //Test input values
         let original_balances: Vec<Balance> = [
             Balance {
@@ -672,7 +672,7 @@ mod tests {
     }
 
     #[test]
-    fn example_3() {
+    fn example_3_not_enough_balance() {
         //Test input values
         let original_balances: Vec<Balance> = [Balance {
             address: "account1".to_string(),
@@ -714,7 +714,7 @@ mod tests {
     }
 
     #[test]
-    fn example_4() {
+    fn example_4_input_output_mismatch() {
         //Test input values
         let original_balances: Vec<Balance> = [Balance {
             address: "account1".to_string(),
@@ -759,7 +759,7 @@ mod tests {
         assert_eq!(result, Err("Inputs do not match outputs".to_string()));
     }
     #[test]
-    fn example_5() {
+    fn example_5_demonstrate_rounding_up() {
         //Test input values
         let original_balances: Vec<Balance> = [
             Balance {
