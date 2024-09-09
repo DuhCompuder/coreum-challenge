@@ -1,4 +1,9 @@
-# Coreum Rust Task
+# Coreum Rust Task (Implement UTXO)
+
+UTXO stands for "Unspent Transaction Output". A UTXO chain is a blockchain that uses the UTXO accounting model (such as Bitcoin and Litecoin), as opposed to account-based models used by Ethereum and EVM-based chains. The challenge is to implement a UTXO system that satisfy the requirements in each of the examples below. Examples 6 - 7 are additional cases that involve more complex interactions. How many test cases can your solution pass? Give it a try.
+
+This is my solution for this challenge. 
+You can try this challenge yourself by cloning from the [original repository](https://github.com/miladz68/coreum-challenge)
 
 Thanks for taking the time to complete this task. The task is a real world problem,
 trying to see how you translate business requirements into readable, maintainable code.
